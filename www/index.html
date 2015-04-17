@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="content-type" content="text/html; charset=utf-8">
+	<title>TUMonline Notenexport</title>
+	<link rel="stylesheet" type="text/css" href="css/bootstrap.min.css">
+	<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+	<style type="text/css">
+	h2 {color: rgb(229, 149, 0)}
+	</style>
+	<script type="text/javascript" src="js/jquery-1.11.2.min.js"></script>
+</head>
+<body>
+<div class="container">
+<h1>TUMonline Notenexport</h1>
+<div class="alert alert-success" role="alert"><strong>Ausgezeichnet!</strong> Sie haben bereits einen Token registriert und können direkt mit Schritt 3 beginnen.</div>
+<div class="step step1">
+	<h2>Schritt 1</h2>
+	<p>Geben Sie Ihre 7-stellige TUMonline Kennung ein, um einen <strong>Zugangs-Token</strong> für TUMonline anzufordern</p>
+		<form id="lrzkennungform" class="form-horizontal">
+			<div class="form-group">
+				<label for="lrzkennung" class="col-sm-3 control-label">TUM Kennung:</label>
+				<div class="col-sm-3">
+					<input type="text" class="form-control" placeholder="z.B. ga21ktr" id="lrzkennung"/>
+				</div>
+				<div class="col-sm-4">
+					<input type="submit" class="btn btn-primary" value="Zugriff anfordern" id="lrzkennungSubmit"/>
+					<span class="glyphicon glyphicon-ok" aria-hidden="true" style="display:none;color:green;" id="tokenSuccess"></span>
+				</div>
+			</div>
+			<div class="form-group">
+				<label for="pToken" class="col-sm-3 control-label">Token:</label>
+				<div class="col-sm-7">
+					<input type="text" class="form-control" readonly id="pToken"/>
+				</div>
+			</div>
+		</form>
+		<div class="alert alert-danger" style="display:none;" id="lrzkennungerror"></div>
+</div>
+<div class="step step2">
+	<h2>Schritt 2</h2>
+	<p>Melden Sie wie gewohnt in TUMonline an: <a href="https://campus.tum.de" target="_blank">https://campus.tum.de</a>
+	<p>Unter dem Reiter <b>Dienste</b> erscheint nach erfolgreichem Abschluss von Schritt 1 ein neuer Punkt <b>Token-Verwaltung</b>.
+	Wählen Sie diesen aus und setzen Sie einen Haken bei <i>aktiviert</i>.
+	<b>Außerdem</b> muss noch bei <i>aktive Rechte</i> der Punkt <i>Eigene Noten</i> aktiviert werden.</p>
+</div>
+<div class="step step3">
+	<h2>Schritt 3</h2>
+	<p>Überprüfe ob dein Zugangs-Token aktiviert ist.</p>
+		<input type="button" class="btn btn-primary" id="isTokenConfirmed" value="Token überprüfen"/>
+		<span class="glyphicon glyphicon-ok confirmationSuccess" aria-hidden="true" style="display:none;color:green;"></span>
+		<span class="glyphicon glyphicon-remove confirmationError" aria-hidden="true" style="display:none;color:red;"></span>
+	<div class="alert alert-danger confirmationError" style="display:none;margin-top:10px;">Bitte überprüfen Sie, ob alle Punkte in Schritt 2 ausgeführt wurden.</div>
+</div>
+<div class="step step4">
+	<h2>Schritt 4</h2>
+	<p>Lade deine Noten als .csv Datei herunter:</p>
+	<button class="btn btn-success" id="download">Download</button>
+</div>
+<script type="text/javascript">
+	$(function() {
+		var token = null;
+		var confirmed = false;
+
+
+		if(window.localStorage && window.localStorage.pToken) {
+			$('#pToken').val(window.localStorage.pToken);
+			token = window.localStorage.pToken;
+			$('#tokenExists').show();
+		}
+		$('#lrzkennungform').submit(function(data) {
+			$('#lrzkennungSubmit').prop('disabled', true);
+			var username = $('#lrzkennung').val();
+			if(token != null) {
+				if(!window.confirm("Es ist bereits ein Token vorhanden. Wollen Sie wirklich einen neuen Token anfordern?")) {
+					$('#lrzkennungSubmit').prop('disabled', false);
+					return false;
+				}
+			}
+			$.get("/requestToken/" + username, function(result) {
+				$('#lrzkennungSubmit').prop('disabled', false);
+				var parser = new DOMParser();
+				xmlDoc = parser.parseFromString(result,"text/xml");
+				if (xmlDoc.getElementsByTagName("error").length > 0) {
+					var error = xmlDoc.getElementsByTagName("error")[0].children[0].childNodes[0].nodeValue;
+					$('#lrzkennungerror').text(error).show();
+				} else {
+					$('#tokenSuccess').show();
+					$('#lrzkennungerror').hide();
+					token = xmlDoc.getElementsByTagName("token")[0].childNodes[0].nodeValue;
+					$('#pToken').val(token);
+					if(window.localStorage) {
+						window.localStorage.pToken = token;
+					}
+				}
+				
+			});
+			return false;
+		});
+		$('#isTokenConfirmed').click(function() {
+			$('#isTokenConfirmed').prop('disabled', true);
+			$.get("/isTokenConfirmed/" + token, function(result) {
+				$('#isTokenConfirmed').prop('disabled', false);
+				var parser = new DOMParser();
+				xmlDoc = parser.parseFromString(result,"text/xml");
+				confirmed = xmlDoc.getElementsByTagName("confirmed")[0].childNodes[0].nodeValue;
+				console.log(confirmed);
+				if(confirmed === "true") {
+					$('.confirmationSuccess').show();
+					$('.confirmationError').hide();
+				} else {
+					$('.confirmationSuccess').hide();
+					$('.confirmationError').show();
+				}
+			});
+		});
+
+		$('#download').click(function() {
+
+			$.get("/getNoten/" + token, function(result) {
+				var parser = new DOMParser();
+				xmlDoc = parser.parseFromString(result,"text/xml");
+				var rows = xmlDoc.getElementsByTagName("row");
+				console.log(rows);
+				var content = [];
+				for(var i = 0; i < rows.length; i++) {
+					var row = rows[i];
+					content.push([
+						row.children[1].childNodes[0].nodeValue, //datum
+						row.children[2].childNodes[0].nodeValue, //lvNr
+						row.children[4].childNodes[0].nodeValue, //lVTitel
+						row.children[6].childNodes[0].nodeValue, //Note
+					].join(";"));
+				}
+
+				var csvContent = "Datum;LehrveranstaltungsNr;LehrverantsaltungsTitel;Note\n" + content.join("\n");
+				var link = document.createElement("a");
+				link.setAttribute("href", "data:text/csv;charset=utf-8,%EF%BB%BF" + encodeURI(csvContent));
+				link.setAttribute("download", "TUMonline_Notenexport.csv");
+
+				link.click(); 
+			});
+		});
+	});
+	
+</script>
+</body>
+</html>
