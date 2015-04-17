@@ -5,7 +5,10 @@ var app = express();
 var baseUrl = "https://campus.tum.de/tumonline/wbservicesbasic.";
 var appName = "TUMonline-Noten-CSV-Export";
 
-
+var port = 8080;
+if(process.argv.length > 2) {
+	port = parseInt(process.argv[2],10);
+}
 //request.debug = true;
 
 app.get('/requestToken/:pUsername', function (req, res) {
@@ -44,7 +47,7 @@ app.get('/getNoten/:pToken', function (req, res) {
 });
 app.use(express.static('www'));
 
-var server = app.listen(80, function () {
+var server = app.listen(port, function () {
 
   var host = server.address().address;
   var port = server.address().port;
